@@ -1,0 +1,7 @@
+# Nome do site estático (Cloudflare Pages lê a pasta raiz)
+name = "matheus-chat"
+
+# Sem build — HTML/CSS/JS puros
+[build]
+  command = ""
+  output = "/"
