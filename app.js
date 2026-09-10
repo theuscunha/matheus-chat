@@ -1,9 +1,10 @@
 /* ============================================================
-   Matheus Chat — frontend vanilla
+   INA — Inteligência não Artificial (frontend vanilla)
    - Conversas + mensagens persistidas no Supabase (fallback local)
    - Respostas via Groq gpt-oss (proxy /api/chat na Cloudflare,
      ou direto via GROQ_API_KEY no modo local)
    - Streaming SSE com efeito de digitação
+   - Aba "Suas preferências" (usuário) + "Administração" (senha)
    ============================================================ */
 (() => {
   "use strict";
@@ -27,8 +28,35 @@
     get supabaseKey() { return store.raw("cfg_supabase_key") || (window.APP_CONFIG?.SUPABASE_ANON_KEY || ""); },
     get groqKey() { return store.raw("cfg_groq_key") || (window.APP_CONFIG?.GROQ_API_KEY || ""); },
     get system() { return store.raw("cfg_system") || (window.APP_CONFIG?.SYSTEM_PROMPT || ""); },
-    get model() { return store.raw("cfg_model") || (window.APP_CONFIG?.DEFAULT_MODEL || "openai/gpt-oss-20b"); }
+    get model() { return store.raw("cfg_model") || (window.APP_CONFIG?.DEFAULT_MODEL || "openai/gpt-oss-20b"); },
+    get adminPass() { return store.raw("cfg_admin_pass") || (window.APP_CONFIG?.ADMIN_PASSWORD || "ina-admin-2026"); },
+    // Preferências do usuário (estilo ChatGPT)
+    get prefMode() { return store.raw("pref_mode") || "equilibrado"; },
+    get prefTone() { return store.raw("pref_tone") || "profissional"; },
+    get prefLength() { return store.raw("pref_length") || "medio"; }
   };
+
+  // Combina a instrução-base do admin com o modo escolhido pelo usuário
+  function effectiveSystem() {
+    const modes = {
+      direto: "MODO DIRETO: respostas curtas e objetivas. Vá ao ponto, evite introduções e conclusões longas.",
+      equilibrado: "MODO EQUILIBRADO: clareza com contexto na medida certa. Estruture bem sem se alongar.",
+      detalhado: "MODO APROFUNDADO: explicações completas e didáticas, com exemplos e passo a passo quando útil."
+    };
+    const tones = {
+      profissional: "Tom profissional e sóbrio.",
+      casual: "Tom casual, leve e acessível.",
+      tecnico: "Tom técnico e preciso, com terminologia adequada.",
+      didatico: "Tom didático, como um bom professor: paciente e claro."
+    };
+    const lengths = {
+      curto: "Extensão curta: no máximo 1-2 parágrafos curtos.",
+      medio: "Extensão média: resposta completa sem enrolação.",
+      longo: "Extensão longa: desenvolva o tema com profundidade."
+    };
+    return `${cfg.system}\n\n${modes[cfg.prefMode] || modes.equilibrado} ${tones[cfg.prefTone] || ""} ${lengths[cfg.prefLength] || ""}`.trim();
+  }
+  function isAdmin() { return sessionStorage.getItem("ina_admin") === "1"; }
 
   let sb = null;               // supabase client
   let conversations = [];      // {id,title,created_at,updated_at}
@@ -66,7 +94,7 @@
     return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
   }
 
-  /* ---------------- Supabase / storage ---------------- */
+  /* ---------------- Supabase / storage (silencioso: sem selo visível) ---------------- */
   function initSupabase() {
     sb = null;
     if (cfg.supabaseUrl && cfg.supabaseKey && window.supabase) {
@@ -74,12 +102,6 @@
         sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
       } catch (e) { console.warn("Supabase init falhou:", e); sb = null; }
     }
-    updateStatus();
-  }
-  function updateStatus() {
-    const dot = $("#statusDot"), title = $("#statusTitle"), sub = $("#statusSub");
-    if (sb) { dot.classList.add("on"); title.textContent = "Supabase conectado"; sub.textContent = "Memória persistente ativa"; }
-    else { dot.classList.remove("on"); title.textContent = "Memória local"; sub.textContent = "Conecte o Supabase"; }
   }
 
   async function dbListConversations() {
@@ -212,11 +234,11 @@
     const wrap = document.createElement("div");
     wrap.className = "msg " + (role === "user" ? "user" : "assistant");
     if (!animate) wrap.style.animation = "none";
-    const avatar = role === "user" ? "Você" : "M";
+    const avatar = role === "user" ? "Você" : "INA";
     wrap.innerHTML = `
       <div class="msg-avatar">${avatar}</div>
       <div class="msg-body">
-        <div class="msg-label">${role === "user" ? "Você" : "Matheus · IA"}</div>
+        <div class="msg-label">${role === "user" ? "Você" : "INA"}</div>
         <div class="bubble">${renderMarkdown(content)}</div>
         <div class="msg-actions">
           <button class="mini-btn" data-copy>Copiar</button>
@@ -235,9 +257,9 @@
     const wrap = document.createElement("div");
     wrap.className = "msg assistant";
     wrap.innerHTML = `
-      <div class="msg-avatar">M</div>
+      <div class="msg-avatar">INA</div>
       <div class="msg-body">
-        <div class="msg-label">Matheus · IA</div>
+        <div class="msg-label">INA</div>
         <div class="bubble"><span class="typing"><i></i><i></i><i></i></span></div>
       </div>`;
     chatInner.appendChild(wrap);
@@ -250,7 +272,7 @@
     aborter = new AbortController();
     const body = {
       model: modelSelect.value || cfg.model,
-      messages: [{ role: "system", content: cfg.system }, ...history.map(m => ({ role: m.role, content: m.content }))],
+      messages: [{ role: "system", content: effectiveSystem() }, ...history.map(m => ({ role: m.role, content: m.content }))],
       temperature: 0.7,
       max_tokens: 2048,
       stream: true
@@ -437,7 +459,7 @@
   $("#exportBtn").onclick = () => {
     if (!messages.length) return toast("Nada para exportar.");
     const title = chatTitle.textContent || "conversa";
-    const md = `# ${title}\n\n` + messages.map(m => `**${m.role === "user" ? "Você" : "Matheus"}:**\n${m.content}\n`).join("\n---\n\n");
+    const md = `# ${title}\n\n` + messages.map(m => `**${m.role === "user" ? "Você" : "INA"}:**\n${m.content}\n`).join("\n---\n\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([md], { type: "text/markdown" }));
     a.download = title.toLowerCase().replace(/[^a-z0-9]+/gi, "-") + ".md";
@@ -457,27 +479,86 @@
   $("#sidebarClose").onclick = closeSidebarMobile;
   scrim.onclick = closeSidebarMobile;
 
-  // settings modal
+  // settings modal: abas Preferências (usuário) / Administração (senha)
   const modal = $("#settingsModal");
+  const tabPrefs = $("#tabPrefs"), tabAdmin = $("#tabAdmin");
+  const panePrefs = $("#panePrefs"), paneAdmin = $("#paneAdmin");
+
+  function paintModeCards() {
+    document.querySelectorAll(".mode-card").forEach(c => {
+      c.classList.toggle("selected", c.dataset.mode === cfg.prefMode);
+    });
+  }
+  function showTab(which) {
+    const isPrefs = which === "prefs";
+    tabPrefs.classList.toggle("active", isPrefs);
+    tabAdmin.classList.toggle("active", !isPrefs);
+    panePrefs.classList.toggle("hidden", !isPrefs);
+    paneAdmin.classList.toggle("hidden", isPrefs);
+  }
+  tabPrefs.onclick = () => showTab("prefs");
+  tabAdmin.onclick = () => showTab("admin");
+
   const openSettings = () => {
-    $("#cfgSupabaseUrl").value = cfg.supabaseUrl;
-    $("#cfgSupabaseKey").value = cfg.supabaseKey;
-    $("#cfgGroqKey").value = cfg.groqKey;
-    $("#cfgSystem").value = cfg.system;
+    // prefs do usuário
+    $("#prefTone").value = cfg.prefTone;
+    $("#prefLength").value = cfg.prefLength;
+    paintModeCards();
+    showTab("prefs");
+    // admin: mostra painel direto se já desbloqueado na sessão
+    const unlocked = isAdmin();
+    $("#adminLock").classList.toggle("hidden", unlocked);
+    $("#adminPanel").classList.toggle("hidden", !unlocked);
+    if (unlocked) {
+      $("#cfgSupabaseUrl").value = cfg.supabaseUrl;
+      $("#cfgSupabaseKey").value = cfg.supabaseKey;
+      $("#cfgGroqKey").value = cfg.groqKey;
+      $("#cfgSystem").value = cfg.system;
+      $("#cfgAdminPass").value = "";
+    } else { $("#adminPass").value = ""; }
     modal.classList.add("open");
   };
   $("#settingsBtn").onclick = openSettings;
   $("#settingsClose").onclick = () => modal.classList.remove("open");
   modal.addEventListener("click", (e) => { if (e.target === modal) modal.classList.remove("open"); });
+
+  document.querySelectorAll(".mode-card").forEach(c => {
+    c.onclick = () => {
+      localStorage.setItem("pref_mode", c.dataset.mode);
+      paintModeCards();
+    };
+  });
+  $("#prefsSave").onclick = () => {
+    localStorage.setItem("pref_tone", $("#prefTone").value);
+    localStorage.setItem("pref_length", $("#prefLength").value);
+    modal.classList.remove("open");
+    toast("Preferências salvas. Valem para as próximas respostas.");
+  };
+
+  $("#adminUnlock").onclick = () => {
+    if ($("#adminPass").value === cfg.adminPass) {
+      sessionStorage.setItem("ina_admin", "1");
+      $("#adminLock").classList.add("hidden");
+      $("#adminPanel").classList.remove("hidden");
+      $("#cfgSupabaseUrl").value = cfg.supabaseUrl;
+      $("#cfgSupabaseKey").value = cfg.supabaseKey;
+      $("#cfgGroqKey").value = cfg.groqKey;
+      $("#cfgSystem").value = cfg.system;
+      toast("Administração desbloqueada.");
+    } else { toast("Senha incorreta.", true); }
+  };
   $("#cfgSave").onclick = async () => {
+    if (!isAdmin()) { toast("Desbloqueie a administração primeiro.", true); return; }
     localStorage.setItem("cfg_supabase_url", $("#cfgSupabaseUrl").value.trim());
     localStorage.setItem("cfg_supabase_key", $("#cfgSupabaseKey").value.trim());
     localStorage.setItem("cfg_groq_key", $("#cfgGroqKey").value.trim());
     localStorage.setItem("cfg_system", $("#cfgSystem").value.trim());
+    const np = $("#cfgAdminPass").value.trim();
+    if (np) localStorage.setItem("cfg_admin_pass", np);
     modal.classList.remove("open");
     initSupabase();
     await refreshConversations();
-    toast(sb ? "Conectado ao Supabase." : "Salvo. Usando memória local.");
+    toast("Configurações do administrador salvas.");
   };
   $("#cfgClear").onclick = () => {
     if (!confirm("Apagar conversas locais e configurações?")) return;

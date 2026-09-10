@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Matheus — Inteligência Aplicada</title>
-  <meta name="description" content="Chatbot profissional com GPT-OSS via Groq, memória persistente em Supabase, hospedado na Cloudflare." />
+  <title>INA — Inteligência não Artificial</title>
+  <meta name="description" content="INA — Inteligência não Artificial. Chatbot profissional com GPT-OSS via Groq, memória persistente em Supabase, hospedado na Cloudflare." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,ital,wght@9..144,0,300;9..144,0,400;9..144,0,500;9..144,0,600;9..144,1,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231E3830'/><text x='50' y='68' font-size='56' text-anchor='middle' fill='%23E9D9B8' font-family='Georgia'>M</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231E3830'/><text x='50' y='66' font-size='34' text-anchor='middle' fill='%23E9D9B8' font-family='Georgia' font-weight='bold'>INA</text></svg>">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js"></script>
@@ -21,10 +21,10 @@
     <!-- ============ SIDEBAR ============ -->
     <aside class="sidebar" id="sidebar">
       <div class="brand">
-        <div class="brand-mark">M</div>
+        <div class="brand-mark">INA</div>
         <div class="brand-text">
-          <strong>Matheus</strong>
-          <span>Inteligência Aplicada</span>
+          <strong>INA</strong>
+          <span>Inteligência não Artificial</span>
         </div>
         <button class="icon-btn sidebar-close" id="sidebarClose" aria-label="Fechar menu">✕</button>
       </div>
@@ -41,13 +41,6 @@
       <nav class="conv-list" id="convList" aria-label="Conversas"></nav>
 
       <div class="sidebar-footer">
-        <div class="status-card" id="statusCard">
-          <span class="dot" id="statusDot"></span>
-          <div>
-            <small id="statusTitle">Memória local</small>
-            <small class="muted" id="statusSub">Conecte o Supabase</small>
-          </div>
-        </div>
         <div class="footer-actions">
           <button class="icon-btn" id="themeBtn" title="Alternar tema" aria-label="Alternar tema">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
@@ -116,25 +109,81 @@
     </main>
   </div>
 
-  <!-- ============ SETTINGS MODAL ============ -->
+  <!-- ============ SETTINGS MODAL: preferências (usuário) + administração ============ -->
   <div class="modal-backdrop" id="settingsModal" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-label="Configurações">
       <div class="modal-head">
         <div>
-          <h3>Configurações</h3>
-          <p>Conecte a memória (Supabase) e o cérebro (Groq).</p>
+          <h3>Personalizar</h3>
+          <p>Escolha como quer receber as respostas.</p>
         </div>
         <button class="icon-btn" id="settingsClose">✕</button>
       </div>
-      <label>Supabase URL<input id="cfgSupabaseUrl" type="url" placeholder="https://xyz.supabase.co" /></label>
-      <label>Supabase Anon Key<input id="cfgSupabaseKey" type="password" placeholder="eyJhbGciOi…" /></label>
-      <label>Groq API Key <small>(apenas desenvolvimento local — em produção use a variável GROQ_API_KEY na Cloudflare)</small><input id="cfgGroqKey" type="password" placeholder="gsk_…" /></label>
-      <label>Instrução de sistema<textarea id="cfgSystem" rows="3">Você é Matheus, um consultor sênior direto e sofisticado. Responda em português brasileiro, com tom profissional e minimalista. Evite clichês de IA (“Como modelo de linguagem…”, emojis excessivos, listas genéricas). Prefira parágrafos curtos, exemplos concretos e próximos passos acionáveis.</textarea></label>
-      <div class="modal-actions">
-        <button class="btn-ghost" id="cfgClear">Limpar dados locais</button>
-        <button class="btn-primary" id="cfgSave">Salvar e conectar</button>
+
+      <div class="tabs">
+        <button class="tab active" id="tabPrefs" type="button">Suas preferências</button>
+        <button class="tab" id="tabAdmin" type="button">Administração</button>
       </div>
-      <p class="hint">Tabelas necessárias: <code>conversations</code> e <code>messages</code>. Veja <code>supabase-schema.sql</code>.</p>
+
+      <!-- Aba do usuário: estilo de resposta tipo ChatGPT -->
+      <div id="panePrefs">
+        <p class="pane-label">Modo de resposta</p>
+        <div class="mode-grid">
+          <button type="button" class="mode-card" data-mode="direto">
+            <strong>Direto</strong><span>Respostas curtas e objetivas, sem rodeios.</span>
+          </button>
+          <button type="button" class="mode-card" data-mode="equilibrado">
+            <strong>Equilibrado</strong><span>Clareza + contexto na medida certa.</span>
+          </button>
+          <button type="button" class="mode-card" data-mode="detalhado">
+            <strong>Aprofundado</strong><span>Explicações completas, com exemplos.</span>
+          </button>
+        </div>
+        <div class="pref-row">
+          <label>Tom
+            <select id="prefTone">
+              <option value="profissional">Profissional</option>
+              <option value="casual">Casual e leve</option>
+              <option value="tecnico">Técnico</option>
+              <option value="didatico">Didático</option>
+            </select>
+          </label>
+          <label>Tamanho
+            <select id="prefLength">
+              <option value="curto">Curto</option>
+              <option value="medio" selected>Médio</option>
+              <option value="longo">Longo</option>
+            </select>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-primary" id="prefsSave" type="button">Salvar preferências</button>
+        </div>
+      </div>
+
+      <!-- Aba do admin: oculta por senha, invisível para usuários comuns -->
+      <div id="paneAdmin" class="hidden">
+        <div id="adminLock">
+          <p class="pane-label">Área restrita</p>
+          <p class="hint">Acesso do administrador. As chaves de Supabase e Groq ficam aqui e não aparecem para os usuários.</p>
+          <label>Senha do administrador<input id="adminPass" type="password" placeholder="••••••••" autocomplete="off" /></label>
+          <div class="modal-actions">
+            <button class="btn-primary" id="adminUnlock" type="button">Desbloquear</button>
+          </div>
+        </div>
+        <div id="adminPanel" class="hidden">
+          <label>Supabase URL<input id="cfgSupabaseUrl" type="url" placeholder="https://xyz.supabase.co" /></label>
+          <label>Supabase Anon Key<input id="cfgSupabaseKey" type="password" placeholder="eyJhbGciOi…" /></label>
+          <label>Groq API Key <small>(dev local — em produção use GROQ_API_KEY na Cloudflare)</small><input id="cfgGroqKey" type="password" placeholder="gsk_…" /></label>
+          <label>Senha do administrador <small>(troque o padrão em config.js → ADMIN_PASSWORD)</small><input id="cfgAdminPass" type="password" placeholder="nova senha" /></label>
+          <label>Instrução de sistema<textarea id="cfgSystem" rows="3"></textarea></label>
+          <div class="modal-actions">
+            <button class="btn-ghost" id="cfgClear" type="button">Limpar dados locais</button>
+            <button class="btn-primary" id="cfgSave" type="button">Salvar e conectar</button>
+          </div>
+          <p class="hint">Tabelas necessárias: <code>conversations</code> e <code>messages</code>. Veja <code>supabase-schema.sql</code>.</p>
+        </div>
+      </div>
     </div>
   </div>
 
